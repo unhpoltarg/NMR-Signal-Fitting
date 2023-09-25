@@ -2,7 +2,7 @@ import math
 import numpy as np
 
 def lorentzian(freq, f0, w, K, theta, c):
-    #w = FWHM, always positive
+    #w = FWHM, always positive, MHz
     #f0 = central frequency
     #K = scaling, neg is flipped
     #c = y intercept
@@ -77,11 +77,28 @@ def deut_phiavg_HB(freq, epsi, omegD, omegQ, A, eta, r, f0, w, KHB1, KHB2):
     base = deut_phiavg(freq, epsi, omegD, omegQ, A, eta, r)
     hole = lorentzian(freq, f0, w, KHB1, 0.0, 0.0)
     bump = lorentzian(freq, 2*omegD - f0, w, KHB2, 0.0, 0.0)
-    total = base + hole + bump
-    '''if (total < 0).any():
-        print(str((total < 0).any()))
-        total = 0.0'''
+    total = base - hole + bump
     return total
+
+def DHB_PHI_HC(freq, mol, epsi, r, f0, w, Ka, Kb):
+    omegD = 32.770224814682045
+    omegQ1 = 0.021716202893838885
+    omegQ2 = 0.026175071963974693
+    A1 = 0.030764636726304282
+    eta1 = 0.06022708879490207
+    eta2 = 0.209831140974086
+    K = 0.2380571648521008
+    scale = 0.0005240312423109996
+    out = 0.0
+    if epsi == -1 and mol == 1:
+        out = scale*(1-K)*deut_phiavg_HB(freq, -1, omegD, omegQ1, A1, eta1, r, f0, w, Ka, 0.5*Kb)
+    if epsi == 1 and mol == 1:
+        out = scale*(1-K)*deut_phiavg_HB(freq, 1, omegD, omegQ1, A1, eta1, r, f0, w, Kb, 0.5*Ka)
+    if epsi == -1 and mol == 0:
+        out = scale*K*deut_phiavg_HB(freq, -1, omegD, omegQ2, A1, eta2, r, f0, w, Ka, 0.5*Kb)
+    if epsi == 1 and mol == 0:
+        out = scale*K*deut_phiavg_HB(freq, 1, omegD, omegQ2, A1, eta2, r, f0, w, Kb, 0.5*Ka)
+    return out
 
 def deut_fit(freq, omegD, omegQ, A, eta, r):
     #both functions added together
@@ -104,6 +121,54 @@ def deut_double(freq, omegD, omegQ1, omegQ2, A1, eta1, eta2, r, K, scale):
     total = scale*((1-K)*one + K*two)
     return total
 
+def holeNbump(freq, omegD, f0, w, KHB):
+    hole = lorentzian(freq, f0, w, KHB, 0.0, 0.0)
+    bump = lorentzian(freq, 2*omegD - f0, w, 0.5*KHB, 0.0, 0.0)
+    total = bump - hole
+    return total
+
+def DD_HB_slap(freq, omegD, omegQ1, omegQ2, A1, eta1, eta2, r, K, scale, f1, f2, w1, w2, K1, K2):
+    base = deut_double(freq, omegD, omegQ1, omegQ2, A1, eta1, eta2, r, K, scale)
+    HNB1 = scale*holeNbump(freq,omegD,f1,w1,K1)
+    HNB2 = scale*holeNbump(freq,omegD,f2,w2,K2)#assume same width
+    total = base + HNB1 + HNB2
+    return total
+
+def DD_HB_SHC(freq, r, f1, f2, w1, w2, K1, K2):
+    omegD = 32.770224814682045
+    omegQ1 = 0.021716202893838885
+    omegQ2 = 0.026175071963974693
+    A1 = 0.030764636726304282
+    eta1 = 0.06022708879490207
+    eta2 = 0.209831140974086
+    K = 0.2380571648521008
+    scale = 0.0005240312423109996
+    out = DD_HB_slap(freq, omegD, omegQ1, omegQ2, A1, eta1, eta2, r, K, scale, f1, f2, w1, w2, K1, K2)
+    return out
+
+def DD_hardcode(freq, r): 
+    omegD = 32.20594369869279
+    omegQ1 = 0.02163207128968159
+    omegQ2 = 0.02991592705730971
+    A1 = 0.0342369160955703
+    eta1 = 0.05178222557664749
+    eta2 = 0.0820979551482718
+    K = 0.11649954602872603
+    scale = 0.0022979193725171823
+    out = deut_double(freq, omegD, omegQ1, omegQ2, A1, eta1, eta2, r, K, scale)
+    return out
+
+def DD_HC_OpenD(freq, omegD, r): 
+    omegQ1 = 0.02443932960112754
+    omegQ2 = 0.029250945928615883
+    A1 = 0.030570759056438798
+    eta1 = 0.06075110520772423
+    eta2 = 0.20093007172833274
+    K = 0.21149454224770958
+    scale = 0.00032487345135919014
+    out = deut_double(freq, omegD, omegQ1, omegQ2, A1, eta1, eta2, r, K, scale)
+    return out 
+
 def deut_double_HB(freq, omegD, omegQ1, omegQ2, A1, eta1, eta2, r, K, scale, f0, w, Ka, Kb):
     A2 = A1*omegQ1/omegQ2
     one = deut_fit_HB(freq, omegD, omegQ1, A1, eta1, r, f0, w, Ka, Kb)
@@ -112,17 +177,16 @@ def deut_double_HB(freq, omegD, omegQ1, omegQ2, A1, eta1, eta2, r, K, scale, f0,
     return total
 
 def DHB_hardcode(freq, r, f0, w, Ka, Kb):
-    omegD = 3.29287000e+01
-    omegQ1 = 2.16607624e-02
-    omegQ2 = 2.87585358e-02
-    A1 = 3.11542336e-02
-    eta1 = 6.69345396e-02
-    eta2 = 6.73700719e-02
-    K = 1.13970002e-01
-    scale = 1.10797550e-02
+    omegD = 32.770224814682045
+    omegQ1 = 0.021716202893838885
+    omegQ2 = 0.026175071963974693
+    A1 = 0.030764636726304282
+    eta1 = 0.06022708879490207
+    eta2 = 0.209831140974086
+    K = 0.2380571648521008
+    scale = 0.0005240312423109996
     out = deut_double_HB(freq, omegD, omegQ1, omegQ2, A1, eta1, eta2, r, K, scale, f0, w, Ka, Kb)
-    return out
-        
+    return out      
                    
 def deut_double_NaiveHB(freq, omegD, omegQ1, omegQ2, A1, eta1, eta2, r, K, scale, f0, w, KHB, theta):
     base = deut_double(freq, omegD, omegQ1, omegQ2, A1, eta1, eta2, r, K, scale)
@@ -270,3 +334,7 @@ def riemann_sum(xdata, ydata):
 def freq2R(freq):
     R = 16.32516*freq - 537.58733
     return R
+
+def TE_Pz_Proton(B, T):
+    Pz = np.tanh(1.0217e-3*B/T)
+    return Pz
