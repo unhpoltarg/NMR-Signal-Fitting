@@ -10,7 +10,6 @@ def lorentzian(freq, f0, w, K, theta, c):
     D = K*(x/(1+x**2))
     A = K*(1/(1+x**2))
     R = A*np.cos(theta)-D*np.sin(theta)+c
-    # R = A*cos-D*sin
     return R
 
 def lorentz2(freq, f0, gamma, cc, b):
@@ -42,7 +41,6 @@ def deut_half(freq, epsi, omegD, omegQ, A, eta, phi):
     #epsi = +/-1
     #phi in radians
     R = (freq - omegD)/(3*omegQ)
-    theta = omegQ/omegD
     rhosq = np.sqrt(A**2 + (1 - epsi*R - eta*np.cos(2*phi))**2)
     rho = np.sqrt(rhosq)
     alpha = np.arccos((1 - epsi*R - eta*np.cos(2*phi))/rhosq)
@@ -54,14 +52,28 @@ def deut_half(freq, epsi, omegD, omegQ, A, eta, phi):
     unpol = (1/(2*math.pi*rho))*(left + right)  #equation 14 in Dulya
     return unpol
 
-def deut_phiavg(freq, epsi, omegD, omegQ, A, eta, r):
-    #averaging the function over phi from 0 to 2pi
+def deut_phiavg_bare(freq, epsi, omegD, omegQ, A, eta):
+    #averaging the function over phi from 0 to pi/2
     R = (freq - omegD)/(3*omegQ)
     theta = omegQ/omegD
     J = 64
     avgtot = 0.0
     for j in range(J):
-        phi = 2*math.pi*j/J
+        phi = (np.pi/2)*j/J
+        unavg_num = np.sqrt(3)*deut_half(freq, epsi, omegD, omegQ, A, eta, phi)
+        unavg_den = np.sqrt(3 - eta*np.cos(2*phi))
+        avgtot += unavg_num/unavg_den
+    aver = avgtot/(J+1)
+    return aver
+
+def deut_phiavg(freq, epsi, omegD, omegQ, A, eta, r):
+    #averaging the function over phi from 0 to pi/2
+    R = (freq - omegD)/(3*omegQ)
+    theta = omegQ/omegD
+    J = 64
+    avgtot = 0.0
+    for j in range(J):
+        phi = (np.pi/2)*j/J
         unavg_num = np.sqrt(3)*deut_half(freq, epsi, omegD, omegQ, A, eta, phi)
         unavg_den = np.sqrt(3 - eta*np.cos(2*phi))
         avgtot += unavg_num/unavg_den
@@ -73,11 +85,54 @@ def deut_phiavg(freq, epsi, omegD, omegQ, A, eta, r):
     abso = aver/omegQ
     return abso
 
+def deut_phiavg_rev(freq, epsi, omegD, omegQ, A, eta, r):
+    #averaging the function over phi from 0 to 2pi
+    R = (freq - omegD)/(3*omegQ)
+    theta = omegQ/omegD
+    J = 64
+    avgtot = 0.0
+    for j in range(J):
+        phi = 2*math.pi*j/J
+        unavg_num = np.sqrt(3)*deut_half(freq, epsi, omegD, omegQ, A, eta, phi)
+        unavg_den = np.sqrt(3 - eta*np.cos(2*phi))
+        avgtot += unavg_num/unavg_den
+    aver = avgtot/(J+1)
+    if epsi == 1:
+        aver = aver*((r**(1+3*theta*R) - 1)/(r**(1+theta*R)))
+    if epsi == -1:
+        aver = aver*((r**2 - r**(1-3*theta*r))/(r**(1-theta*R)))
+    abso = aver/omegQ
+    return abso
+
+'''def deut_phiavg_NonBolt(freq, epsi, omegD, omegQ, A, eta, r):
+    #averaging the function over phi from 0 to 2pi
+    R = (freq - omegD)/(3*omegQ)
+    theta = omegQ/omegD
+    J = 64
+    avgtot = 0.0
+    for j in range(J):
+        phi = 2*math.pi*j/J
+        unavg_num = np.sqrt(3)*deut_half(freq, epsi, omegD, omegQ, A, eta, phi)
+        unavg_den = np.sqrt(3 - eta*np.cos(2*phi))
+        avgtot += unavg_num/unavg_den
+    aver = r*avgtot/(J+1)
+    abso = aver/omegQ
+    return abso'''
+
 def deut_phiavg_HB(freq, epsi, omegD, omegQ, A, eta, r, f0, w, KHB1, KHB2):
     base = deut_phiavg(freq, epsi, omegD, omegQ, A, eta, r)
     hole = lorentzian(freq, f0, w, KHB1, 0.0, 0.0)
     bump = lorentzian(freq, 2*omegD - f0, w, KHB2, 0.0, 0.0)
-    total = base - hole + bump
+    if epsi == 1:
+        base = base - hole + bump
+    if epsi == -1:
+        base = base - hole + bump
+    return base
+
+def holebump(freq, omegD, f0, w, KHB1, KHB2):
+    hole = lorentzian(freq, f0, w, KHB1, 0.0, 0.0)
+    bump = lorentzian(freq, 2*omegD - f0, w, KHB2, 0.0, 0.0)
+    total = bump - hole
     return total
 
 def DHB_PHI_HC(freq, mol, epsi, r, f0, w, Ka, Kb):
@@ -107,9 +162,30 @@ def deut_fit(freq, omegD, omegQ, A, eta, r):
     total = neg + pos    #equation 24 in Dulya
     return total
 
+def deut_fit_rev(freq, omegD, omegQ, A, eta, r):
+    #both functions added together
+    neg = deut_phiavg_rev(freq, -1, omegD, omegQ, A, eta, r)
+    pos = deut_phiavg_rev(freq, 1, omegD, omegQ, A, eta, r)
+    total = neg + pos    #equation 24 in Dulya
+    return total
+
+def deut_fit_NonBolt(freq, omegD, omegQ, A, eta, rN, rP):
+    #both functions added together
+    neg = deut_phiavg(freq, -1, omegD, omegQ, A, eta, rN)
+    pos = deut_phiavg(freq, 1, omegD, omegQ, A, eta, rP)
+    total = neg + pos    #equation 24 in Dulya
+    return total
+
+def deut_fit_flippy(freq, omegD, omegQ, A, eta, r):
+    #both functions added together
+    neg = deut_phiavg(freq, -1, omegD, omegQ, A, eta, r)
+    pos = deut_phiavg(freq, 1, omegD, omegQ, A, eta, r)
+    total = neg - pos    #equation 24 in Dulya
+    return total
+
 def deut_fit_HB(freq, omegD, omegQ, A, eta, r, f0, w, Ka, Kb):
-    neg = deut_phiavg_HB(freq, -1, omegD, omegQ, A, eta, r, f0, w, Ka, -0.5*Kb)
-    pos = deut_phiavg_HB(freq, 1, omegD, omegQ, A, eta, r, f0, w, Kb, -0.5*Ka)
+    neg = deut_phiavg_HB(freq, -1, omegD, omegQ, A, eta, r, f0, w, Ka, 0.5*Kb)
+    pos = deut_phiavg_HB(freq, 1, omegD, omegQ, A, eta, r, f0, w, Kb, 0.5*Ka)
     total = neg + pos
     return total
 
@@ -121,9 +197,55 @@ def deut_double(freq, omegD, omegQ1, omegQ2, A1, eta1, eta2, r, K, scale):
     total = scale*((1-K)*one + K*two)
     return total
 
+def deut_double_NonBolt(freq, omegD, omegQ1, omegQ2, A1, eta1, eta2, rN, rP, K, scale):
+    #carbon and oxygen bonds separately
+    A2 = A1*omegQ1/omegQ2
+    one = deut_fit_NonBolt(freq, omegD, omegQ1, A1, eta1, rN, rP)
+    two = deut_fit_NonBolt(freq, omegD, omegQ2, A2, eta2, rN, rP)
+    total = scale*((1-K)*one + K*two)
+    return total
+
+def deut_double_rev(freq, omegD, omegQ1, omegQ2, A1, eta1, eta2, r, K, scale):
+    #carbon and oxygen bonds separately
+    A2 = A1*omegQ1/omegQ2
+    one = deut_fit_rev(freq, omegD, omegQ1, A1, eta1, r)
+    two = deut_fit_rev(freq, omegD, omegQ2, A2, eta2, r)
+    total = scale*((1-K)*one + K*two)
+    return total
+
+def deut_double_Q(freq, omegD, omegQ1, omegQ2, A1, eta1, eta2, r, K, scale):
+    PzN = r*r - 1
+    PzD = r*r + r + 1
+    Pz = PzN/PzD
+    a = -0.38063
+    b = -0.61489
+    Q = a*Pz**4 + b*Pz**2 + 1
+    total = Q*deut_double(freq, omegD, omegQ1, omegQ2, A1, eta1, eta2, r, K, scale)
+    return total
+
+def FlexQ(r):
+    omegQ1 = 2.17286634e-02
+    PzN = r*r - 1
+    PzD = r*r + r + 1
+    Pz = PzN/PzD
+    FlexQ = Pz*(-1*Pz + 0.5*omegQ1) + 1
+    #FlexQ = Pz*(-0.9076*Pz + 0.005336) + 1
+    return FlexQ
+
+def deut_double_cube(freq, omegD, omegQ1, omegQ2, A1, eta1, eta2, r, K, scale, x3, x2, x1, x0):
+    recur = deut_double(freq, omegD, omegQ1, omegQ2, A1, eta1, eta2, r, K, scale)
+    cube = cubic(freq, x3, x2, x1, x0)
+    return recur + cube
+
 def holeNbump(freq, omegD, f0, w, KHB):
     hole = lorentzian(freq, f0, w, KHB, 0.0, 0.0)
     bump = lorentzian(freq, 2*omegD - f0, w, 0.5*KHB, 0.0, 0.0)
+    total = bump - hole
+    return total
+
+def holeNbump2(freq, omegD, f0, w, Ka, Kb):
+    hole = lorentzian(freq, f0, w, Ka, 0.0, 0.0)
+    bump = lorentzian(freq, 2*omegD - f0, w, Kb, 0.0, 0.0)
     total = bump - hole
     return total
 
@@ -176,6 +298,20 @@ def deut_double_HB(freq, omegD, omegQ1, omegQ2, A1, eta1, eta2, r, K, scale, f0,
     total = scale*((1-K)*one + K*two)
     return total
 
+def deut_double_HB_cube(freq, omegD, omegQ1, omegQ2, A1, eta1, eta2, r, K, scale, f0, w, Ka, Kb, x3, x2, x1, x0):
+    A2 = A1*omegQ1/omegQ2
+    one = deut_fit_HB(freq, omegD, omegQ1, A1, eta1, r, f0, w, Ka, Kb)
+    two = deut_fit_HB(freq, omegD, omegQ2, A2, eta2, r, f0, w, Ka, Kb)
+    total = scale*((1-K)*one + K*two)
+    cube = cubic(freq, x3, x2, x1, x0)
+    return total + cube
+
+def deut_double_HB_just(freq, omegD, scale, f0, w, Ka, Kb):
+    one = holebump(freq, omegD, f0, w, Ka, 0.5*Kb)
+    two = holebump(freq, omegD, f0, w, Kb, 0.5*Ka)
+    total = scale*(one + two)
+    return total
+
 def DHB_hardcode(freq, r, f0, w, Ka, Kb):
     omegD = 32.770224814682045
     omegQ1 = 0.021716202893838885
@@ -218,22 +354,77 @@ def deut_disp_phiavg(freq, epsi, omegD, omegQ, A, eta, r):
     J = 64
     avgtot = 0.0
     for j in range(J):
-        phi = 2*math.pi*j/J
+        phi = (math.pi/2)*j/J
         unavg_num = np.sqrt(3)*deut_disp_half(freq, epsi, omegD, omegQ, A, eta, phi)
         unavg_den = np.sqrt(3 - eta*np.cos(2*phi))
         avgtot += unavg_num/unavg_den
     aver = avgtot/(J+1)
     if epsi == -1:
-        aver = -1*aver*((r**(1+3*theta*R) - 1)/(r**(1+theta*R)))
+        aver = 1*aver*((r**(1+3*theta*R) - 1)/(r**(1+theta*R)))
     if epsi == 1:
-        aver = aver*((r**2 - r**(1-3*theta*r))/(r**(1-theta*R)))
+        aver = -1*aver*((r**2 - r**(1-3*theta*r))/(r**(1-theta*R)))
     abso = aver/omegQ
     return abso
+
+def deut_disp_phiavg_rev(freq, epsi, omegD, omegQ, A, eta, r):
+    #averaging the function over phi from 0 to 2pi
+    R = (freq - omegD)/(3*omegQ)
+    theta = omegQ/omegD
+    J = 64
+    avgtot = 0.0
+    for j in range(J):
+        phi = 2*math.pi*j/J
+        unavg_num = np.sqrt(3)*deut_disp_half(freq, epsi, omegD, omegQ, A, eta, phi)
+        unavg_den = np.sqrt(3 - eta*np.cos(2*phi))
+        avgtot += unavg_num/unavg_den
+    aver = avgtot/(J+1)
+    if epsi == 1:
+        aver = -1*aver*((r**(1+3*theta*R) - 1)/(r**(1+theta*R)))
+    if epsi == -1:
+        aver = 1*aver*((r**2 - r**(1-3*theta*r))/(r**(1-theta*R)))
+    abso = aver/omegQ
+    return abso
+
+'''def deut_disp_phiavg_NonBolt(freq, epsi, omegD, omegQ, A, eta, r):
+    #averaging the function over phi from 0 to 2pi
+    R = (freq - omegD)/(3*omegQ)
+    theta = omegQ/omegD
+    J = 64
+    avgtot = 0.0
+    for j in range(J):
+        phi = 2*math.pi*j/J
+        unavg_num = np.sqrt(3)*deut_disp_half(freq, epsi, omegD, omegQ, A, eta, phi)
+        unavg_den = np.sqrt(3 - eta*np.cos(2*phi))
+        avgtot += unavg_num/unavg_den
+    aver = r*(avgtot/(J+1))
+    abso = aver/omegQ
+    return abso'''
 
 def deut_disp_fit(freq, omegD, omegQ, A, eta, r):
     #both functions added together
     neg = deut_disp_phiavg(freq, -1, omegD, omegQ, A, eta, r)
     pos = deut_disp_phiavg(freq, 1, omegD, omegQ, A, eta, r)
+    total = neg + pos    #equation 24 in Dulya
+    return total
+
+def deut_disp_fit_flippy(freq, omegD, omegQ, A, eta, r):
+    #both functions added together
+    neg = deut_disp_phiavg(freq, -1, omegD, omegQ, A, eta, r)
+    pos = deut_disp_phiavg(freq, 1, omegD, omegQ, A, eta, r)
+    total = neg - pos    #equation 24 in Dulya
+    return total
+
+def deut_disp_fit_rev(freq, omegD, omegQ, A, eta, r):
+    #both functions added together
+    neg = deut_disp_phiavg_rev(freq, -1, omegD, omegQ, A, eta, r)
+    pos = deut_disp_phiavg_rev(freq, 1, omegD, omegQ, A, eta, r)
+    total = neg + pos    #equation 24 in Dulya
+    return total
+
+def deut_disp_fit_NonBolt(freq, omegD, omegQ, A, eta, rN, rP):
+    #both functions added together
+    neg = deut_disp_phiavg(freq, -1, omegD, omegQ, A, eta, rN)
+    pos = deut_disp_phiavg(freq, 1, omegD, omegQ, A, eta, rP)
     total = neg + pos    #equation 24 in Dulya
     return total
 
@@ -245,16 +436,124 @@ def deut_disp_double(freq, omegD, omegQ1, omegQ2, A1, eta1, eta2, r, K, scale):
     total = scale*((1-K)*one + K*two)
     return total
 
+def deut_disp_double_rev(freq, omegD, omegQ1, omegQ2, A1, eta1, eta2, r, K, scale):
+    #carbon and oxygen bonds separately
+    A2 = A1*omegQ1/omegQ2
+    one = deut_disp_fit_rev(freq, omegD, omegQ1, A1, eta1, r)
+    two = deut_disp_fit_rev(freq, omegD, omegQ2, A2, eta2, r)
+    total = scale*((1-K)*one + K*two)
+    return total
+
+def deut_disp_double_NonBolt(freq, omegD, omegQ1, omegQ2, A1, eta1, eta2, rN, rP, K, scale):
+    #carbon and oxygen bonds separately
+    A2 = A1*omegQ1/omegQ2
+    one = deut_disp_fit_NonBolt(freq, omegD, omegQ1, A1, eta1, rN, rP)
+    two = deut_disp_fit_NonBolt(freq, omegD, omegQ2, A2, eta2, rN, rP)
+    total = scale*((1-K)*one + K*two)
+    return total
+
 def deut_real_double(freq, omegD, omegQ1, omegQ2, A1, eta1, eta2, r, K, scale, phase):
     absor = deut_double(freq, omegD, omegQ1, omegQ2, A1, eta1, eta2, r, K, scale)
     disper = deut_disp_double(freq, omegD, omegQ1, omegQ2, A1, eta1, eta2, r, K, scale)
+    real = absor*np.cos(phase) + disper*np.sin(phase)
+    return real
+
+def deut_real_double_rev(freq, omegD, omegQ1, omegQ2, A1, eta1, eta2, r, K, scale, phase):
+    absor = deut_double_rev(freq, omegD, omegQ1, omegQ2, A1, eta1, eta2, r, K, scale)
+    disper = deut_disp_double_rev(freq, omegD, omegQ1, omegQ2, A1, eta1, eta2, r, K, scale)
+    real = absor*np.cos(phase) + disper*np.sin(phase)
+    return real
+
+def Xi(r):
+    PzN = r*r - 1
+    PzD = r*r + r + 1
+    Pz = PzN/PzD
+    a = -0.38616
+    b = -0.60995
+    Ksi = a*Pz**4 + b*Pz**2 + 1
+    return Ksi
+
+def deut_real_Xi(freq,omegD,omegQ,A,eta,r,scale,phase):
+    absor = deut_fit(freq, omegD, omegQ, A, eta, r)
+    disper = deut_disp_fit(freq, omegD, omegQ, A, eta, r)
+    real = absor*np.cos(phase) + disper*np.sin(phase)
+    real2 = scale*real
+    Ksi = Xi(r)
+    real3 = Ksi*real2
+    return real3
+
+def deut_real_Xi_flippy(freq,omegD,omegQ,A,eta,r,scale,phase):
+    absor = deut_fit_flippy(freq, omegD, omegQ, A, eta, r)
+    disper = deut_disp_fit_flippy(freq, omegD, omegQ, A, eta, r)
+    real = absor*np.cos(phase) + disper*np.sin(phase)
+    real2 = scale*real
+    Ksi = Xi(r)
+    real3 = Ksi*real2
+    return real3
+
+def deut_real_Xi_rev(freq,omegD,omegQ,A,eta,r,scale,phase):
+    absor = deut_fit_rev(freq, omegD, omegQ, A, eta, r)
+    disper = deut_disp_fit_rev(freq, omegD, omegQ, A, eta, r)
+    real = absor*np.cos(phase) + disper*np.sin(phase)
+    real2 = scale*real
+    Ksi = Xi(r)
+    real3 = Ksi*real2
+    return real3
+
+def deut_real_cube_Xi(freq,omegD,omegQ,A,eta,r,scale,phase, x3, x2, x1, x0):
+    recur = deut_real_Xi(freq,omegD,omegQ,A,eta,r,scale,phase)
+    cube = cubic(freq, x3, x2, x1, x0)
+    return recur + cube
+
+def deut_real_double_Xi(freq, omegD, omegQ1, omegQ2, A1, eta1, eta2, r, K, scale, phase):
+    Ksi = Xi(r)
+    out = Ksi*deut_real_double(freq, omegD, omegQ1, omegQ2, A1, eta1, eta2, r, K, scale, phase)
+    return out
+
+def deut_real_double_Xi_rev(freq, omegD, omegQ1, omegQ2, A1, eta1, eta2, r, K, scale, phase):
+    Ksi = Xi(r)
+    out = Ksi*deut_real_double_rev(freq, omegD, omegQ1, omegQ2, A1, eta1, eta2, r, K, scale, phase)
+    return out
+
+def deut_real_double_Xi_NonBolt(freq, omegD, omegQ1, omegQ2, A1, eta1, eta2, rN, rP, K, scale, phase):
+    absor = deut_double_NonBolt(freq, omegD, omegQ1, omegQ2, A1, eta1, eta2, rN, rP, K, scale)
+    disper = deut_disp_double_NonBolt(freq, omegD, omegQ1, omegQ2, A1, eta1, eta2, rN, rP, K, scale)
+    real = absor*np.cos(phase) + disper*np.sin(phase)
+    Ksi = 1#Xi(r)
+    out = Ksi*real
+    return out
+
+def deut_real_double_HB(freq, omegD, omegQ1, omegQ2, A1, eta1, eta2, r, K, scale, phase, f0, w, Ka, Kb):
+    absor = deut_double_HB(freq, omegD, omegQ1, omegQ2, A1, eta1, eta2, r, K, scale, f0, w, Ka, Kb)
+    disper = deut_disp_double_HB(freq, omegD, omegQ1, omegQ2, A1, eta1, eta2, r, K, scale, f0, w, Ka, Kb)
     real = absor*np.cos(phase) - disper*np.sin(phase)
     return real
 
-def deut_real_double_cube(freq, omegD, omegQ1, omegQ2, A1, eta1, eta2, r, K, scale, phase, x0, x1, x2, x3):
+def deut_real_double_cube(freq, omegD, omegQ1, omegQ2, A1, eta1, eta2, r, K, scale, phase, x3, x2, x1, x0):
     recur = deut_real_double(freq, omegD, omegQ1, omegQ2, A1, eta1, eta2, r, K, scale, phase)
     cube = cubic(freq, x3, x2, x1, x0)
     return recur + cube
+
+def deut_real_double_cube_Xi(freq, omegD, omegQ1, omegQ2, A1, eta1, eta2, r, K, scale, phase, x3, x2, x1, x0):
+    recur = deut_real_double_Xi(freq, omegD, omegQ1, omegQ2, A1, eta1, eta2, r, K, scale, phase)
+    cube = cubic(freq, x3, x2, x1, x0)
+    return recur + cube
+
+def deut_real_double_cube_Xi_NonBolt(freq, omegD, omegQ1, omegQ2, A1, eta1, eta2, rN, rP, K, scale, phase, x3, x2, x1, x0):
+    recur = deut_real_double_Xi_NonBolt(freq, omegD, omegQ1, omegQ2, A1, eta1, eta2, rN, rP, K, scale, phase)
+    cube = cubic(freq, x3, x2, x1, x0)
+    return recur + cube
+    
+
+def deut_real_double_cube_HB(freq, omegD, omegQ1, omegQ2, A1, eta1, eta2, r, K, scale, phase, f0, w, Ka, Kb, x3, x2, x1, x0):
+    recur = deut_real_double_HB(freq, omegD, omegQ1, omegQ2, A1, eta1, eta2, r, K, scale, phase, f0, w, Ka, Kb)
+    cube = cubic(freq, x3, x2, x1, x0)
+    return recur + cube
+
+def deut_real_double_lin(freq, omegD, omegQ1, omegQ2, A1, eta1, eta2, r, K, scale, phase, x1, x0):
+    recur = deut_real_double(freq, omegD, omegQ1, omegQ2, A1, eta1, eta2, r, K, scale, phase)
+    lin = freq*x1 + x0
+    return recur + lin
 
 def deut_real_double_lorz(freq, omegD, omegQ1, omegQ2, A1, eta1, eta2, r, K, scale, phase, f0, gamma, cc, b):
     recur = deut_real_double(freq, omegD, omegQ1, omegQ2, A1, eta1, eta2, r, K, scale, phase)
@@ -266,6 +565,23 @@ def deut_im_double(freq, omegD, omegQ1, omegQ2, A1, eta1, eta2, r, K, scale, pha
     disper = deut_disp_double(freq, omegD, omegQ1, omegQ2, A1, eta1, eta2, r, K, scale)
     imag = absor*np.sin(phase) + disper*np.cos(phase) + offs + slope*freq
     return imag
+
+def deut_false_asymm(freq, omegD, omegQ1, omegQ2, A1, eta1, eta2, r, K, scale, ksi):
+    R = (freq - omegD)/(3*omegQ1)
+    absor = deut_double(freq, omegD, omegQ1, omegQ2, A1, eta1, eta2, r, K, scale)
+    out = absor*(1 + 0.5*ksi*(1 + R))
+    return out
+
+def deut_false_asymm_cube(freq, omegD, omegQ1, omegQ2, A1, eta1, eta2, r, K, scale, ksi, x3, x2, x1, x0):
+    recur = deut_false_asymm(freq, omegD, omegQ1, omegQ2, A1, eta1, eta2, r, K, scale, ksi)
+    cube = cubic(freq, x3, x2, x1, x0)
+    return recur + cube
+
+def deut_false_asymm_zero(freq, omegD, omegQ1, omegQ2, A1, eta1, eta2, r, K, scale, ksi):
+    R = (freq - omegD)/(3*omegQ1)
+    absor = deut_double(freq, omegD, omegQ1, omegQ2, A1, eta1, eta2, r, K, scale)
+    out = absor*(1 + 0.5*ksi*(R))
+    return out
 
 def DIDhardCode(freq, r, slope, offs):
     omegD = 3.27705415e+01
@@ -293,16 +609,16 @@ def DRD_fitR(freq, r):
     out = deut_real_double(freq, omegD, omegQ1, omegQ2, A1, eta1, eta2, r, K, scale, phase)
     return out
 
-def DRD_fitR_cube(freq, r, x0, x1, x2, x3):
-    omegD=3.30048700e+01
-    omegQ1=2.16427904e-02
-    omegQ2=2.70776767e-02
-    A1=2.61510356e-02
-    eta1=6.62185536e-02
-    eta2=1.46435235e-01
-    K=9.75343811e-02
-    scale=2.69027249e-03
-    phase=3.35679145e-02
+def DRD_fitR_cube(freq, phase, x0, x1, x2, x3):
+    omegD=3.27699200e+01
+    omegQ1=2.18377432e-02
+    omegQ2=2.49030980e-02
+    A1=1.94853669e-02
+    eta1=6.10387396e-02
+    eta2=2.43948117e-01
+    r=1.34995364e+00
+    K=2.97787454e-01
+    scale=5.81930565e-04
     recur = deut_real_double_cube(freq, omegD, omegQ1, omegQ2, A1, eta1, eta2, r, K, scale, phase, x0, x1, x2, x3)
     return recur
 
@@ -310,9 +626,23 @@ def ratio_method(r):
     pol = (r*r - 1)/(r + r*r + 1)
     return pol
 
+def ratio_method_HO(r,omegD,omegQ): #higher order
+    num = r*r - 1
+    den = r*r + r*(1 + (6.0/5.0)*((np.log(r)*omegQ/omegD)**2)) + 1
+    pol = num/den
+    return pol
+
 def ratio_tensor(r):
     pol = (r*r - 2*r + 1)/(r + r*r + 1)
     return pol
+
+def ratioPderiv(r):
+    deriv = (r**2 + 4*r + 1)/((r**2 + r + 1)**2)
+    return deriv
+
+def ratioQderiv(r):
+    deriv = (3*(r**2 - 1))/((r**2 + r + 1)**2)
+    return deriv
 
 def riemann_step(ydata, step):
     area = 0.0
@@ -331,10 +661,43 @@ def riemann_sum(xdata, ydata):
         area += step*ydata[i]
     return area
 
+def chisq(data, fit):
+    chisq =  0.0
+    Range = len(data)
+    for i in range(Range):
+        chisq += abs(((data[i] - fit[i])**2)/fit[i])
+    return chisq
+
+def chisq_red(data, fit, std):
+    chisq =  0.0
+    Range = len(data)
+    for i in range(Range):
+        chisq += ((data[i] - fit[i])**2)/std**2
+    red = chisq/(Range - 1)
+    return red
+
+def std(data, fit):
+    summ = 0.0
+    N = len(data)
+    for i in range(N):
+        summ += (data[i] - fit[i])**2
+    out = np.sqrt((1/(N-1))*summ)
+    return out
+
 def freq2R(freq):
     R = 16.32516*freq - 537.58733
     return R
 
 def TE_Pz_Proton(B, T):
     Pz = np.tanh(1.0217e-3*B/T)
+    return Pz
+
+def TE_Pz_Deut(B, T):
+    g = 0.857438
+    mu = 5.05e-27
+    kB = 1.381e-23
+    gmu2k = (g*mu)/(2*kB)
+    num = 4*np.tanh(gmu2k*(B/T))
+    den = 3 + np.tanh(gmu2k*(B/T))**2
+    Pz = num/den
     return Pz

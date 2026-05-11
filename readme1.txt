@@ -1,0 +1,7 @@
+deuts is the library containing all of the relevant functions that the other programs call. It is required.
+
+DeuteronAnalysisComponentsAllXi is the go-to program for fitting a deuterated hydrocarbon signal. Follow the commented instructions for formatting ExampleCSV1. If fitting deuterated ammonia (or other single-bond material), use DeuteronAnalysisComponentsAllXi_Single. Either way, it allows all parameters to float, outputting the found parameters, and a few plots. Use DeuteronAnalysisComponentsAllXi_Flat if the signal has already been baseline and cubic subtracted.
+
+If the parameters are already known, use DeuteronAnalysisComponentsSimpleXi, it will run faster. You will need to edit the code to include the known parameters.
+
+For a hole-burnt signal, use DeuteronAnalysisComponentsSimpleXi_HB (this assumes a hydrocarbon, you will need to adjust it if it's ammonia). This requires you to have fit an equilibrium signal first and gotten the parameters. The current version of this code does a wing fit on the sides, as trying to do a full cubic subtraction led to messy results. However, this means this code can only be used on fully real signals. I would recommend implementing a trial pass of the hole-burnt signal pretending it's an equilibrium signal just to get a cubic subtraction, but it will need some testing.
