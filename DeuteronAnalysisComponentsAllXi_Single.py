@@ -36,7 +36,7 @@ centfreq = 0.0
 freqspan = 0.0
 nmrwidth = 0
 
-filename = 'ExampleCSV1.csv' #Change to your csv's name - should be in same folder as this file
+filename = 'ExampleCSV_Ammonia.csv' #Change to your csv's name - should be in same folder as this file
 file = open(filename, 'r')
 reader = csv.reader(file)
 
@@ -48,26 +48,13 @@ for row in reader:
         nmrwidth = int(row[2])
     if rownum == 2:
         for i in range(nmrwidth):
-            baseline.append(-1*float(row[0+i]))
+            baseline.append(float(row[0+i]))
     if rownum == 3:
         for i in range(nmrwidth):
-            rawdata.append(-1*float(row[0+i]))
-    '''if rownum >= 5:
-        temp = []
-        for i in range(nmrwidth):
-            temp.append(float(row[0+i]))
-        bases.append(temp)'''
+            rawdata.append(float(row[0+i]))
     rownum += 1
 
 file.close()
-
-'''avgbase = []
-for i in range(nmrwidth):
-    temp = 0.0
-    for j in range(len(bases)):
-        temp += bases[j][i]
-    temp = temp/len(bases)
-    avgbase.append(temp)'''
 
 print("Cent freq = " + str(centfreq))
 
@@ -96,8 +83,8 @@ plt.show()
 #This fits the flattened signal. The parameters will print out in IDLE.
 #If any parameters are "railing" (going to X.99999 or X.00001), adjust the minima or maxima.
 pFit, cFit = curve_fit(deuts.deut_real_cube_Xi, freqs, newRaw, maxfev=100000,
-                           bounds=([centfreq-0.05,0.0214,0.01,0.001,1,0,-0.5,-100,-1000,-1000,-100000],
-                               [centfreq+0.05,0.03,0.5,0.5,3,0.1,0.5,100,1000,1000,100000]))
+                           bounds=([centfreq-0.03,0.0214,0.01,0.001,1,0,-0.5,-100,-1000,-1000,-100000],
+                               [centfreq+0.03,0.03,0.5,0.5,3,0.1,0.5,100,1000,1000,100000]))
 
 errors = np.sqrt(np.diag(cFit))
 omegD = pFit[0] # Omega_D - the central frequency of the signal
